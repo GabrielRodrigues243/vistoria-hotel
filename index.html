@@ -103,6 +103,9 @@ details.floor[open]>summary{margin-bottom:8px}
 .ck-room{font-family:var(--display);font-weight:700;font-size:34px;line-height:1;padding:8px 14px;border-radius:10px;background:var(--accent);color:var(--accent-ink);font-variant-numeric:tabular-nums}
 .progress{height:8px;background:var(--na-soft);border-radius:99px;overflow:hidden}
 .progress i{display:block;height:100%;background:var(--accent);transition:width .2s}
+.progress i.bateu{background:var(--ok)}
+.grid tfoot th,.grid tfoot td{border-bottom:0;border-top:2px solid var(--line);font-weight:700;color:var(--muted)}
+.grid td.tot.bateu{color:var(--ok)}
 .sec{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden}
 .sec-h{display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--surface-2);border-bottom:1px solid var(--line)}
 .sec-h h3{margin-right:auto}
@@ -268,10 +271,10 @@ table.grid{border-collapse:separate;border-spacing:0;font-variant-numeric:tabula
         <strong id="monthLbl"></strong>
         <button class="btn small" id="nextM" aria-label="Próximo mês">›</button>
       </div>
-      <div class="legend"><span><i style="background:var(--ok)"></i>Sem pendências</span><span><i style="background:var(--nok)"></i>Com não conformidade</span><span><i style="background:var(--today)"></i>Hoje</span></div>
+      <div class="legend"><span><i style="background:var(--ok)"></i>Sem problema</span><span><i style="background:var(--nok)"></i>Com problema</span><span><i style="background:var(--today)"></i>Hoje</span></div>
     </div>
     <div class="gridwrap"><table class="grid" id="grid"></table></div>
-    <p class="hint">Toque em um dia marcado para ver o check list. O número dentro do quadrado indica mais de uma vistoria no dia.</p>
+    <p class="hint">Toque em um dia marcado para ver o check list. O número dentro do quadrado indica mais de uma vistoria no dia. A linha "Por dia" mostra quantos quartos foram feitos em cada dia (verde = meta batida).</p>
     <div class="panel stack" id="detail" hidden></div>
     <div class="panel stack" style="gap:8px">
       <div class="label">Últimas vistorias do mês</div>
@@ -291,12 +294,15 @@ table.grid{border-collapse:separate;border-spacing:0;font-variant-numeric:tabula
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzVv09gAs67jQGkEhgKu8z6f-bPY4xSjespZUk9x7MFpOcf2QjLJUgDjYttjAgfOBka/exec";
 
 // 2) Opcional: link da planilha, para o botão "Abrir planilha" no Controle
-const PLANILHA_URL = "https://script.google.com/macros/s/AKfycbzVv09gAs67jQGkEhgKu8z6f-bPY4xSjespZUk9x7MFpOcf2QjLJUgDjYttjAgfOBka/exec";
+const PLANILHA_URL = "";
 
 // 3) Quartos: 6 andares com a mesma numeração final em cada andar
 //    (1º andar: 151, 153 ... 182 · 2º andar: 251, 253 ... 282 · e assim até o 6º)
 const ANDARES = 6;
 const FINAIS = [51,53,54,55,56,57,58,59,60,61,62,63,64,65,66,68,69,70,71,72,73,74,75,76,77,78,79,80,82];
+
+// Meta: quantos quartos vistoriar por dia
+const META_DIARIA = 10;
 
 // 4) Itens do check list. Para mudar, edite os textos abaixo.
 const CHECKLIST = [
@@ -365,6 +371,7 @@ let todayKey = localDate(new Date());
 let curMonth = todayKey.slice(0,7);
 let curRemote = [];     // vistorias do mês atual vindas da planilha
 let selRemote = [];     // vistorias do mês exibido no Controle
+let cache = {};         // vistorias já carregadas, por mês
 let curDocs = {}, monthDocs = {}, todayData = null;
 let monthKey = curMonth;
 let selCell = null;
@@ -399,16 +406,32 @@ async function enviarFila(){
     }
   } finally { enviando = false; recompute(); updateStatus(); }
 }
-async function carregar(){
+async function carregar(force){
   try {
-    curRemote = await apiListar(curMonth);
-    if (monthKey !== curMonth && !$("#p-controle").hidden) selRemote = await apiListar(monthKey);
+    curRemote = await apiListar(curMonth); cache[curMonth] = curRemote;
+    await mesCache(prevMonthOf(curMonth), force);
+    if (monthKey !== curMonth && !$("#p-controle").hidden) {
+      selRemote = await mesCache(monthKey, force);
+      await mesCache(prevMonthOf(monthKey), force);
+    }
     online = true;
   } catch (e) {
     if (e.code === "codigo") { pedirCodigo("Código da equipe incorreto."); return; }
     online = false;
   }
   recompute(); updateStatus();
+}
+function prevMonthOf(mk){ const [y,m] = mk.split("-").map(Number); const d = new Date(y, m-2, 1); return d.getFullYear()+"-"+pad(d.getMonth()+1); }
+function nomeMes(mk){ const [y,m] = mk.split("-").map(Number); return new Date(y, m-1, 1).toLocaleDateString("pt-BR",{month:"long"}); }
+async function mesCache(mk, force){
+  if (!force && cache[mk]) return cache[mk];
+  const v = await apiListar(mk); cache[mk] = v; return v;
+}
+// quartos diferentes vistoriados no mês e por dia
+function resumoMes(arr){
+  const quartos = new Set(), porDia = {};
+  for (const e of arr || []) { quartos.add(e.room); (porDia[e.date] = porDia[e.date] || new Set()).add(e.room); }
+  return { quartos: quartos.size, vistorias: (arr||[]).length, porDia };
 }
 function toDays(arr){
   const m = {};
@@ -494,10 +517,15 @@ function renderPicker(){
   const groups = new Map();
   for (const r of rooms) { const k = floorName(r); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(r); }
   const doneAll = rooms.filter(r => st[r]).length;
-  const mes = new Date().toLocaleDateString("pt-BR",{month:"long"});
+  const mes = nomeMes(curMonth);
+  const hoje = new Set(entriesOf(todayData).map(e => e.room)).size;
+  const prevArr = cache[prevMonthOf(curMonth)];
+  const prevTxt = prevArr ? '<span>Em '+esc(nomeMes(prevMonthOf(curMonth)))+': <b>'+resumoMes(prevArr).quartos+'</b> quartos</span>' : '';
   const openState = {};
   box.querySelectorAll("details[data-g]").forEach(d => openState[d.dataset.g] = d.open);
-  let html = '<div class="panel stack" style="gap:8px"><div class="row" style="justify-content:space-between"><span class="label">Meta de '+esc(mes)+'</span><b style="font-variant-numeric:tabular-nums">'+doneAll+' de '+rooms.length+' quartos</b></div><div class="progress"><i style="width:'+(rooms.length?100*doneAll/rooms.length:0)+'%"></i></div></div>';
+  let html = '<div class="panel stack" style="gap:8px"><div class="row" style="justify-content:space-between"><span class="label">Meta de hoje</span><b style="font-variant-numeric:tabular-nums">'+hoje+' de '+META_DIARIA+' quartos</b></div>'+
+    '<div class="progress"><i style="width:'+Math.min(100, 100*hoje/META_DIARIA)+'%"'+(hoje >= META_DIARIA ? ' class="bateu"' : '')+'></i></div>'+
+    '<div class="row hint" style="justify-content:space-between"><span>'+(hoje >= META_DIARIA ? 'Meta do dia batida.' : 'Faltam '+(META_DIARIA-hoje)+' para a meta de hoje.')+'</span><span>Em '+esc(mes)+': <b>'+doneAll+'</b> quartos</span>'+prevTxt+'</div></div>';
   for (const [g, list] of groups) {
     const done = list.filter(r => st[r]).length;
     const open = g in openState ? openState[g] : done < list.length;
@@ -625,7 +653,7 @@ function monthBounds(mk){ const [y,m] = mk.split("-").map(Number); const days = 
 async function carregarMes(){
   if (monthKey === curMonth) { recompute(); return; }
   $("#recent").innerHTML = '<p class="empty">Carregando…</p>';
-  try { selRemote = await apiListar(monthKey); online = true; } catch (e) { selRemote = []; online = false; }
+  try { selRemote = await mesCache(monthKey); await mesCache(prevMonthOf(monthKey)).catch(() => null); online = true; } catch (e) { selRemote = []; online = false; }
   recompute(); updateStatus();
 }
 function renderControl(){
@@ -639,22 +667,28 @@ function renderControl(){
   const doneMonth = rooms.filter(r => roomsMonth.has(r)).length;
   const nokMonth = monthEntries.reduce((a,e) => a + (e.nok||0), 0);
   const isCur = monthKey === curMonth;
+  const isFuture = monthKey > curMonth;
   const pend = rooms.filter(r => !roomsMonth.has(r));
-  const daysLeft = isCur ? b.days - (+todayKey.slice(8,10)) + 1 : 0;
-  const perDay = daysLeft ? Math.ceil(pend.length / daysLeft) : 0;
-  const pct = rooms.length ? Math.round(100*doneMonth/rooms.length) : 0;
-  const mesNome = new Date(b.y, b.m-1, 1).toLocaleDateString("pt-BR",{month:"long"});
+  const mesNome = nomeMes(monthKey);
+  const res = resumoMes(monthEntries);
+  const diasPassados = isFuture ? 0 : isCur ? +todayKey.slice(8,10) : b.days;
+  const diasBatidos = Object.values(res.porDia).filter(s => s.size >= META_DIARIA).length;
+  const prevKey = prevMonthOf(monthKey);
+  const prevArr = cache[prevKey];
+  const prevR = prevArr ? resumoMes(prevArr) : null;
+  const dHoje = isCur ? Math.min(100, 100*doneToday/META_DIARIA) : 0;
   $("#stats").innerHTML =
-    '<div class="stat" style="grid-column:1/-1"><div class="row" style="justify-content:space-between"><span class="label">Meta de '+esc(mesNome)+': todos os quartos</span><span class="hint">'+pct+'%</span></div><b>'+doneMonth+'<span style="font-size:18px"> de '+rooms.length+' quartos</span></b>'+
-      '<div class="progress" style="margin-block:8px"><i style="width:'+pct+'%"></i></div>'+
-      '<span>'+(pend.length === 0 ? "Meta do mês cumprida." : isCur ? "Faltam "+pend.length+" quartos em "+daysLeft+" dia"+(daysLeft>1?"s":"")+": cerca de "+perDay+" por dia para fechar a meta." : "Ficaram "+pend.length+" quartos sem vistoria neste mês.")+'</span></div>'+
-    (isCur ? '<div class="stat"><b>'+doneToday+'</b><span>quartos vistoriados hoje</span></div>' : '')+
-    '<div class="stat"><b>'+monthEntries.length+'</b><span>vistorias no mês</span></div>'+
+    (isCur ? '<div class="stat" style="grid-column:1/-1"><div class="row" style="justify-content:space-between"><span class="label">Meta de hoje · '+brDate(todayKey)+'</span><span class="hint">'+META_DIARIA+' quartos por dia</span></div><b>'+doneToday+'<span style="font-size:18px"> de '+META_DIARIA+' quartos</span></b>'+
+      '<div class="progress" style="margin-block:8px"><i style="width:'+dHoje+'%"'+(doneToday >= META_DIARIA ? ' class="bateu"' : '')+'></i></div>'+
+      '<span>'+(doneToday >= META_DIARIA ? "Meta do dia batida." : "Faltam "+(META_DIARIA-doneToday)+" quartos para bater a meta de hoje.")+'</span></div>' : '')+
+    '<div class="stat"><b>'+doneMonth+'</b><span>quartos vistoriados em '+esc(mesNome)+'</span></div>'+
+    '<div class="stat"><b>'+(prevR ? prevR.quartos : "–")+'</b><span>quartos vistoriados em '+esc(nomeMes(prevKey))+' (mês anterior)</span></div>'+
+    '<div class="stat"><b>'+diasBatidos+'<span style="font-size:18px"> de '+diasPassados+'</span></b><span>dias com a meta de '+META_DIARIA+' batida</span></div>'+
     '<div class="stat"><b>'+nokMonth+'</b><span>problemas encontrados no mês</span></div>';
   const groups = new Map();
   for (const r of rooms) { const k = floorName(r); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(r); }
   $("#floorProg").innerHTML = [...groups].map(([g, list]) => { const d = list.filter(r => roomsMonth.has(r)).length; return '<div class="fl"><span>'+esc(g)+'</span><div class="progress"><i style="width:'+(100*d/list.length)+'%"></i></div><b>'+d+'/'+list.length+'</b></div>'; }).join("");
-  $("#pendLabel").textContent = "Faltam vistoriar em "+mesNome+" · "+pend.length;
+  $("#pendLabel").textContent = "Ainda não vistoriados em "+mesNome+" · "+pend.length;
   $("#pending").innerHTML = pend.length ? [...groups].map(([g, list]) => { const p = list.filter(r => !roomsMonth.has(r)); return p.length ? '<div class="stack" style="gap:6px"><span class="hint">'+esc(g)+'</span><div class="chips">'+p.map(r => '<span class="chip">'+esc(r)+'</span>').join("")+'</div></div>' : ''; }).join("") : '<p class="empty">Todos os quartos foram vistoriados neste mês.</p>';
   const wd = ["D","S","T","Q","Q","S","S"];
   let head = '<thead><tr><th class="room">Quarto</th>';
@@ -676,7 +710,13 @@ function renderControl(){
     }
     body += '</tr>';
   }
-  body += '</tbody>';
+  body += '</tbody><tfoot><tr><th class="room">Por dia</th>';
+  for (let d=1; d<=b.days; d++) {
+    const key = monthKey+"-"+pad(d);
+    const n = res.porDia[key] ? res.porDia[key].size : 0;
+    body += '<td class="tot'+(n >= META_DIARIA ? " bateu" : "")+(key===todayKey?" tcol":"")+'" title="'+n+' quartos no dia '+d+'">'+(n || "")+'</td>';
+  }
+  body += '</tr></tfoot>';
   $("#grid").innerHTML = head + body;
   const rec = monthEntries.slice().sort((a,c) => (c.finishedAt||"").localeCompare(a.finishedAt||"")).slice(0,20);
   $("#recent").innerHTML = rec.length ? rec.map(e => '<button data-r="'+esc(e.room)+'" data-d="'+e.date+'"><span class="rn">'+esc(e.room)+'</span><span><span>'+brDate(e.date)+' às '+hhmm(e.finishedAt, e)+'</span><br><span class="sub">'+esc(e.inspector)+(e._pend?' · aguardando envio':'')+'</span></span>'+(e.nok?'<span class="pill warn">'+e.nok+' problema'+(e.nok>1?'s':'')+'</span>':'<span class="pill ok">OK</span>')+'</button>').join("") : '<p class="empty">Nenhuma vistoria registrada neste mês.</p>';
@@ -705,7 +745,7 @@ $("#detail").addEventListener("click", e => { if (e.target.closest("[data-close]
 function shiftMonth(n){ const b = monthBounds(monthKey); const d = new Date(b.y, b.m-1+n, 1); monthKey = d.getFullYear()+"-"+pad(d.getMonth()+1); selCell = null; selRemote = []; recompute(); carregarMes(); }
 $("#prevM").addEventListener("click", () => shiftMonth(-1));
 $("#nextM").addEventListener("click", () => shiftMonth(1));
-$("#refreshBtn").addEventListener("click", async () => { $("#refreshBtn").textContent = "Atualizando…"; await enviarFila(); await carregar(); $("#refreshBtn").textContent = "Atualizar"; });
+$("#refreshBtn").addEventListener("click", async () => { $("#refreshBtn").textContent = "Atualizando…"; await enviarFila(); await carregar(true); $("#refreshBtn").textContent = "Atualizar"; });
 if (PLANILHA_URL) { $("#sheetLink").href = PLANILHA_URL; $("#sheetLink").hidden = false; }
 
 /* ---------- início ---------- */
