@@ -176,6 +176,19 @@ table.grid{border-collapse:separate;border-spacing:0;font-variant-numeric:tabula
 .two{display:grid;grid-template-columns:1fr 1.4fr;gap:16px}
 @media (max-width:760px){.two{grid-template-columns:1fr}}
 .hint{font-size:14px;color:var(--muted);margin:0}
+.fotos{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px}
+.foto{position:relative;aspect-ratio:4/3;max-width:100%;border-radius:10px;overflow:hidden;background:var(--surface-2);border:1px solid var(--line)}
+.foto img{width:100%;height:100%;object-fit:cover;display:block}
+.foto .tipo{position:absolute;left:6px;top:6px;background:rgba(0,0,0,.6);color:#fff;font-size:11px;font-weight:700;padding:2px 7px;border-radius:99px;letter-spacing:.03em}
+.foto .rm{position:absolute;right:6px;top:6px;border:0;background:rgba(0,0,0,.6);color:#fff;border-radius:99px;font-size:12px;font-weight:700;padding:3px 9px}
+.addfoto{aspect-ratio:4/3;max-width:100%;border:2px dashed var(--line);background:var(--surface);border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;font-weight:700;color:var(--accent);padding:8px;text-align:center}
+.addfoto small{font-weight:600;color:var(--muted);font-size:12px}
+.addfoto.req{border-color:var(--nok);color:var(--nok)}
+.addfoto svg{width:26px;height:26px}
+.thumbs{display:flex;gap:8px;flex-wrap:wrap}
+.thumbs a{display:block;width:96px;aspect-ratio:4/3;border-radius:8px;overflow:hidden;background:var(--surface-2);border:1px solid var(--line);position:relative}
+.thumbs img{width:100%;height:100%;object-fit:cover;display:block}
+.thumbs span{position:absolute;left:4px;bottom:4px;background:rgba(0,0,0,.6);color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:99px}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
@@ -250,6 +263,12 @@ table.grid{border-collapse:separate;border-spacing:0;font-variant-numeric:tabula
         </div>
       </div>
       <div id="sections" class="stack"></div>
+      <div class="panel stack" style="gap:10px">
+        <div class="label">Fotos do quarto</div>
+        <p class="hint">A foto da <b>porta com o número do quarto</b> é obrigatória. Você pode adicionar mais até 4 fotos gerais do quarto.</p>
+        <div class="fotos" id="fotos"></div>
+        <input type="file" id="fotoInput" accept="image/*" hidden>
+      </div>
       <div class="panel field">
         <label class="label" for="general">Observações gerais</label>
         <textarea id="general" rows="3" placeholder="Ex.: hóspede relatou barulho no ar-condicionado; solicitado técnico"></textarea>
@@ -392,6 +411,45 @@ let monthKey = curMonth;
 let selCell = null;
 let draft = store.get("vq-draft");
 let discardArmed = false;
+let draftFotos = { porta: null, gerais: [] };   // fotos da vistoria em andamento
+const MAX_GERAIS = 4;
+
+/* ---------- fotos guardadas no aparelho (IndexedDB) ---------- */
+const idb = (() => {
+  let dbp = null; const mem = {};
+  function abrir(){
+    if (!dbp) dbp = new Promise((res, rej) => {
+      try { const r = indexedDB.open("vistorias", 1); r.onupgradeneeded = () => r.result.createObjectStore("kv"); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }
+      catch (e) { rej(e); }
+    });
+    return dbp;
+  }
+  async function tx(modo, fn){
+    const db = await abrir();
+    return new Promise((res, rej) => { const t = db.transaction("kv", modo); const req = fn(t.objectStore("kv")); t.oncomplete = () => res(req ? req.result : undefined); t.onerror = () => rej(t.error); });
+  }
+  return {
+    async get(k){ try { return await tx("readonly", s => s.get(k)); } catch (e) { return mem[k]; } },
+    async set(k, v){ try { await tx("readwrite", s => s.put(v, k)); } catch (e) { mem[k] = v; } },
+    async del(k){ try { await tx("readwrite", s => s.delete(k)); } catch (e) { delete mem[k]; } }
+  };
+})();
+function comprimir(file){
+  return new Promise((res, rej) => {
+    const url = URL.createObjectURL(file); const img = new Image();
+    img.onload = () => {
+      const max = 1280; let w = img.naturalWidth, h = img.naturalHeight; const k = Math.min(1, max / Math.max(w, h));
+      w = Math.round(w*k); h = Math.round(h*k);
+      const c = document.createElement("canvas"); c.width = w; c.height = h;
+      c.getContext("2d").drawImage(img, 0, 0, w, h); URL.revokeObjectURL(url);
+      res(c.toDataURL("image/jpeg", 0.72));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error("imagem")); };
+    img.src = url;
+  });
+}
+const driveThumb = id => "https://drive.google.com/thumbnail?id=" + encodeURIComponent(id) + "&sz=w400";
+const driveView = id => "https://drive.google.com/file/d/" + encodeURIComponent(id) + "/view";
 let online = false;
 
 /* ---------- planilha (Apps Script) ---------- */
@@ -402,10 +460,11 @@ async function apiListar(mes){
   if (!j.ok) { const e = new Error(j.erro || "erro"); e.code = j.erro; throw e; }
   return j.vistorias || [];
 }
-async function apiSalvar(v){
-  const r = await fetch(SCRIPT_URL, { method:"POST", headers:{ "Content-Type":"text/plain;charset=utf-8" }, body: JSON.stringify({ codigo: code, vistoria: v }) });
+async function apiSalvar(v, fotos){
+  const r = await fetch(SCRIPT_URL, { method:"POST", headers:{ "Content-Type":"text/plain;charset=utf-8" }, body: JSON.stringify({ codigo: code, vistoria: v, fotos: fotos || [] }) });
   const j = await r.json();
   if (!j.ok) { const e = new Error(j.erro || "erro"); e.code = j.erro; throw e; }
+  return j;
 }
 let enviando = false;
 async function enviarFila(){
@@ -414,10 +473,16 @@ async function enviarFila(){
   try {
     while (fila.length) {
       const v = fila[0];
-      try { await apiSalvar(v); }
+      let j;
+      try {
+        const fotos = (await idb.get("fotos-" + v.id)) || [];
+        j = await apiSalvar(v, fotos.map(f => ({ tipo: f.tipo, data: String(f.data).split(",")[1] })));
+      }
       catch (e) { if (e.code === "codigo") pedirCodigo("O código da equipe mudou. Digite o novo código."); break; }
       fila.shift(); store.set("vq-fila", fila);
-      if (!curRemote.some(x => x.id === v.id) && v.date.slice(0,7) === curMonth) curRemote.push(v);
+      await idb.del("fotos-" + v.id);
+      const salvo = { ...v, fotos: (j && j.fotos) || [] };
+      if (!curRemote.some(x => x.id === v.id) && v.date.slice(0,7) === curMonth) curRemote.push(salvo);
     }
   } finally { enviando = false; recompute(); updateStatus(); }
 }
@@ -572,10 +637,11 @@ $("#floors").addEventListener("click", e => {
 });
 $("#draftMsg").addEventListener("click", e => {
   if (e.target.closest("[data-resume]")) openChecklist();
-  const s = e.target.closest("[data-switch]"); if (s) { draft = null; openRoom(s.dataset.switch); }
+  const s = e.target.closest("[data-switch]"); if (s) { draft = null; draftFotos = { porta:null, gerais:[] }; idb.del("draft-fotos"); openRoom(s.dataset.switch); }
 });
 function openRoom(room){
   if (!draft || draft.room !== room) {
+    draftFotos = { porta:null, gerais:[] }; idb.del("draft-fotos");
     draft = { room, answers:{}, notes:{}, general:"", startedAt:new Date().toISOString() };
     allItems().forEach(i => draft.answers[i.id] = "ok");
   }
@@ -593,9 +659,46 @@ function openChecklist(){
   $("#inspector").value = store.get("vq-inspector") || "";
   $("#general").value = draft.general || "";
   discardArmed = false; $("#discardBtn").textContent = "Descartar";
-  renderSections(); updateProgress();
+  renderSections(); updateProgress(); renderFotos();
+  idb.get("draft-fotos").then(f => { if (f && draft && f.room === draft.room) { draftFotos = { porta: f.porta || null, gerais: f.gerais || [] }; renderFotos(); } });
   window.scrollTo({top:0});
 }
+/* ---------- fotos do quarto ---------- */
+const ICON_CAM = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>';
+function salvarDraftFotos(){ idb.set("draft-fotos", { room: draft.room, porta: draftFotos.porta, gerais: draftFotos.gerais }); }
+function renderFotos(){
+  let h = "";
+  if (draftFotos.porta) h += '<div class="foto"><img src="'+draftFotos.porta+'" alt="Porta do quarto"><span class="tipo">Porta</span><button type="button" class="rm" data-rm="porta">Trocar</button></div>';
+  else h += '<button type="button" class="addfoto req" data-add="porta">'+ICON_CAM+'Foto da porta<small>com o número · obrigatória</small></button>';
+  draftFotos.gerais.forEach((src, i) => { h += '<div class="foto"><img src="'+src+'" alt="Foto do quarto '+(i+1)+'"><span class="tipo">Foto '+(i+1)+'</span><button type="button" class="rm" data-rm="'+i+'">Remover</button></div>'; });
+  if (draftFotos.gerais.length < MAX_GERAIS) h += '<button type="button" class="addfoto" data-add="geral">'+ICON_CAM+'Adicionar foto<small>'+draftFotos.gerais.length+' de '+MAX_GERAIS+' gerais</small></button>';
+  $("#fotos").innerHTML = h;
+}
+let fotoAlvo = null;
+$("#fotos").addEventListener("click", e => {
+  const add = e.target.closest("[data-add]"), rm = e.target.closest("[data-rm]");
+  const inp = $("#fotoInput");
+  if (add) {
+    fotoAlvo = add.dataset.add;
+    if (fotoAlvo === "porta") inp.setAttribute("capture", "environment"); else inp.removeAttribute("capture");
+    inp.value = ""; inp.click();
+  } else if (rm) {
+    if (rm.dataset.rm === "porta") {  // trocar: tira outra foto da porta
+      fotoAlvo = "porta"; inp.setAttribute("capture", "environment"); inp.value = ""; inp.click();
+    } else { draftFotos.gerais.splice(+rm.dataset.rm, 1); salvarDraftFotos(); renderFotos(); }
+  }
+});
+$("#fotoInput").addEventListener("change", async e => {
+  const f = e.target.files && e.target.files[0]; if (!f || !draft) return;
+  try {
+    const data = await comprimir(f);
+    if (fotoAlvo === "porta") draftFotos.porta = data;
+    else if (draftFotos.gerais.length < MAX_GERAIS) draftFotos.gerais.push(data);
+    salvarDraftFotos(); renderFotos();
+  } catch (err) {
+    $("#finishMsg").classList.add("err"); $("#finishMsg").textContent = "Não foi possível ler essa foto. Tente tirar de novo.";
+  }
+});
 function closeChecklist(){ $("#hero").hidden = false; $("#checklist").hidden = true; $("#picker").hidden = false; renderPicker(); window.scrollTo({top:0}); }
 function itemHTML(it){
   const v = draft.answers[it.id];
@@ -636,13 +739,14 @@ $("#inspector").addEventListener("input", e => store.set("vq-inspector", e.targe
 $("#backBtn").addEventListener("click", closeChecklist);
 $("#discardBtn").addEventListener("click", () => {
   if (!discardArmed) { discardArmed = true; $("#discardBtn").textContent = "Confirmar descarte"; return; }
-  draft = null; store.del("vq-draft"); closeChecklist();
+  draft = null; store.del("vq-draft"); draftFotos = { porta:null, gerais:[] }; idb.del("draft-fotos"); closeChecklist();
 });
 
 $("#finishBtn").addEventListener("click", async () => {
   const msg = $("#finishMsg");
   const inspector = $("#inspector").value.trim();
   if (!inspector) { msg.classList.add("err"); msg.textContent = "Informe o nome do responsável pela vistoria."; $("#inspector").focus(); return; }
+  if (!draftFotos.porta) { msg.classList.add("err"); msg.textContent = "Tire a foto da porta do quarto com o número antes de finalizar."; $("#fotos").scrollIntoView({block:"center",behavior:"smooth"}); return; }
   const items = allItems();
   const now = new Date();
   const issues = items.filter(i => draft.answers[i.id] === "nok").map(i => ({ section:i.section, item:i.text, note:(draft.notes[i.id]||"").trim() }));
@@ -652,12 +756,17 @@ $("#finishBtn").addEventListener("click", async () => {
     room: draft.room, date: localDate(now), time: localTime(now), inspector,
     startedAt: draft.startedAt, finishedAt: now.toISOString(),
     total: items.length, ok: items.length - issues.length - na.length, nok: issues.length, na: na.length,
-    issues, naItems: na, general: (draft.general||"").trim()
+    issues, naItems: na, general: (draft.general||"").trim(),
+    nFotos: 1 + draftFotos.gerais.length
   };
+  $("#finishBtn").disabled = true;
+  await idb.set("fotos-" + entry.id, [{ tipo:"porta", data: draftFotos.porta }].concat(draftFotos.gerais.map(d => ({ tipo:"geral", data:d }))));
+  $("#finishBtn").disabled = false;
   fila.push(entry); store.set("vq-fila", fila);
   draft = null; store.del("vq-draft");
+  draftFotos = { porta:null, gerais:[] }; idb.del("draft-fotos");
   const resumo = 'Vistoria do quarto <b>'+esc(entry.room)+'</b> finalizada às '+entry.time+'. '+(entry.nok ? entry.nok+" problema"+(entry.nok>1?"s":"")+" registrado"+(entry.nok>1?"s":"")+"." : "Nenhum problema.");
-  $("#savedMsg").innerHTML = '<div class="notice saved'+(entry.nok?" has-nok":"")+'"><p>'+resumo+' <span id="envio">Enviando para a planilha…</span></p></div>';
+  $("#savedMsg").innerHTML = '<div class="notice saved'+(entry.nok?" has-nok":"")+'"><p>'+resumo+' <span id="envio">Enviando para a planilha com '+entry.nFotos+' foto'+(entry.nFotos>1?'s':'')+'…</span></p></div>';
   closeChecklist(); recompute();
   await enviarFila();
   const el = document.getElementById("envio");
@@ -748,7 +857,8 @@ function renderDetail(){
     es.map(e => '<div class="entry"><div class="row"><b>'+hhmm(e.finishedAt, e)+'</b><span class="meta">por '+esc(e.inspector)+' · '+e.ok+' OK, '+e.nok+' com problema, '+e.na+' N/A</span>'+(e.nok?'<span class="pill warn">Com problema</span>':'<span class="pill ok">Sem problema</span>')+'</div>'+
       (e.issues && e.issues.length ? '<div class="label">Problemas encontrados</div><ul>'+e.issues.map(i => '<li><b>'+esc(i.item)+'</b> <span class="meta">('+esc(i.section)+')</span>'+(i.note?': '+esc(i.note):'')+'</li>').join("")+'</ul>' : '')+
       (e.naItems && e.naItems.length ? '<div class="meta">Não se aplica: '+e.naItems.map(esc).join(", ")+'</div>' : '')+
-      (e.general ? '<div><span class="label">Observações</span><br>'+esc(e.general)+'</div>' : '')+'</div>').join("");
+      (e.general ? '<div><span class="label">Observações</span><br>'+esc(e.general)+'</div>' : '')+
+      (e.fotos && e.fotos.length ? '<div class="label">Fotos</div><div class="thumbs">'+e.fotos.map((f,i) => '<a href="'+driveView(f.id)+'" target="_blank" rel="noopener"><img src="'+driveThumb(f.id)+'" alt="Foto '+(i+1)+'" loading="lazy"><span>'+(f.tipo==="porta"?"Porta":"Foto "+i)+'</span></a>').join("")+'</div>' : (e._pend && e.nFotos ? '<div class="meta">'+e.nFotos+' foto(s) aguardando envio</div>' : ''))+'</div>').join("");
 }
 function pick(e){
   const b = e.target.closest("[data-r][data-d]"); if (!b) return;
