@@ -186,6 +186,19 @@ table.grid{border-collapse:separate;border-spacing:0;font-variant-numeric:tabula
 .addfoto.req{border-color:var(--nok);color:var(--nok)}
 .addfoto svg{width:26px;height:26px}
 .thumbs{display:flex;gap:8px;flex-wrap:wrap}
+.thumbs button{border:0;padding:0;cursor:zoom-in}
+.corr{display:flex;flex-direction:column;gap:8px;padding:12px;border-radius:10px;background:var(--nok-soft)}
+.corr.feito{background:var(--ok-soft)}
+.corr input,.corr textarea{border:1px solid var(--line);background:var(--surface);border-radius:9px;padding:8px 10px;width:100%}
+.btn.ok{background:var(--ok);border-color:var(--ok);color:#fff}
+.tag.fixed{background:var(--ok-soft);border-color:transparent}
+.tag.fixed small{color:var(--ok)}
+.lock{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:700;color:var(--muted);background:var(--na-soft);padding:3px 10px;border-radius:99px}
+.lb{position:fixed;inset:0;z-index:50;background:rgba(5,10,20,.92);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:16px;padding-top:calc(16px + env(safe-area-inset-top,0px));padding-bottom:calc(16px + env(safe-area-inset-bottom,0px))}
+.lb img{max-width:100%;max-height:78vh;object-fit:contain;border-radius:8px;background:#111}
+.lb .lbbar{display:flex;gap:10px;align-items:center;color:#fff;font-weight:600;flex-wrap:wrap;justify-content:center}
+.lb .btn{background:#fff;color:#111;border-color:#fff}
+.chipbtn{cursor:pointer;background:var(--nok-soft);border-color:transparent;color:var(--nok)}
 .thumbs a{display:block;width:96px;aspect-ratio:4/3;border-radius:8px;overflow:hidden;background:var(--surface-2);border:1px solid var(--line);position:relative}
 .thumbs img{width:100%;height:100%;object-fit:cover;display:block}
 .thumbs span{position:absolute;left:4px;bottom:4px;background:rgba(0,0,0,.6);color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:99px}
@@ -243,6 +256,8 @@ table.grid{border-collapse:separate;border-spacing:0;font-variant-numeric:tabula
       <div id="floors" class="stack"></div>
     </div>
 
+    <div id="visao" class="stack" hidden></div>
+
     <div id="checklist" class="stack" hidden>
       <div class="panel stack">
         <div class="ck-head">
@@ -291,6 +306,10 @@ table.grid{border-collapse:separate;border-spacing:0;font-variant-numeric:tabula
       <div class="row"><a class="btn" id="sheetLink" href="#" target="_blank" rel="noopener" hidden>Abrir planilha</a><button class="btn" id="refreshBtn">Atualizar</button></div>
     </div>
     <div class="stats" id="stats"></div>
+    <div class="panel stack" style="gap:10px" id="abertosBox" hidden>
+      <div class="label">Problemas em aberto · toque no quarto para ver e marcar como corrigido</div>
+      <div class="chips" id="abertos"></div>
+    </div>
     <div class="panel stack" style="gap:10px">
       <div class="label">Progresso por andar</div>
       <div class="stack" style="gap:8px" id="floorProg"></div>
@@ -305,7 +324,7 @@ table.grid{border-collapse:separate;border-spacing:0;font-variant-numeric:tabula
         <strong id="monthLbl"></strong>
         <button class="btn small" id="nextM" aria-label="Próximo mês">›</button>
       </div>
-      <div class="legend"><span><i style="background:var(--ok)"></i>Sem problema</span><span><i style="background:var(--nok)"></i>Com problema</span><span><i style="background:var(--today)"></i>Hoje</span></div>
+      <div class="legend"><span><i style="background:var(--ok)"></i>Sem problema ou corrigido (✓)</span><span><i style="background:var(--nok)"></i>Problema em aberto</span><span><i style="background:var(--today)"></i>Hoje</span></div>
     </div>
     <div class="gridwrap"><table class="grid" id="grid"></table></div>
     <p class="hint">Toque em um dia marcado para ver o check list. O número dentro do quadrado indica mais de uma vistoria no dia. A linha "Por dia" mostra quantos quartos foram feitos em cada dia (verde = meta batida).</p>
@@ -318,6 +337,10 @@ table.grid{border-collapse:separate;border-spacing:0;font-variant-numeric:tabula
   </div>
 </main>
 
+<div class="lb" id="lb" hidden role="dialog" aria-label="Foto ampliada">
+  <img id="lbImg" alt="">
+  <div class="lbbar"><span id="lbTxt"></span><a class="btn small" id="lbOpen" target="_blank" rel="noopener">Abrir no Drive</a><button class="btn small" id="lbClose">Fechar</button></div>
+</div>
 <script>
 (function(){
 /* =====================================================================
@@ -466,6 +489,15 @@ async function apiSalvar(v, fotos){
   if (!j.ok) { const e = new Error(j.erro || "erro"); e.code = j.erro; throw e; }
   return j;
 }
+async function apiCorrigir(id, por, nota){
+  const agora = new Date();
+  const r = await fetch(SCRIPT_URL, { method:"POST", headers:{ "Content-Type":"text/plain;charset=utf-8" },
+    body: JSON.stringify({ codigo: code, acao: "corrigir", id, por, nota, em: localDate(agora), hora: localTime(agora) }) });
+  const j = await r.json();
+  if (!j.ok) { const e = new Error(j.erro || "erro"); e.code = j.erro; throw e; }
+  return j;
+}
+let recusadas = [];   // vistorias recusadas porque o quarto já tinha vistoria no mês
 let enviando = false;
 async function enviarFila(){
   if (enviando || !fila.length) { updateStatus(); return; }
@@ -478,7 +510,14 @@ async function enviarFila(){
         const fotos = (await idb.get("fotos-" + v.id)) || [];
         j = await apiSalvar(v, fotos.map(f => ({ tipo: f.tipo, data: String(f.data).split(",")[1] })));
       }
-      catch (e) { if (e.code === "codigo") pedirCodigo("O código da equipe mudou. Digite o novo código."); break; }
+      catch (e) {
+        if (e.code === "ja_vistoriado") {   // outra pessoa já vistoriou este quarto no mês
+          fila.shift(); store.set("vq-fila", fila); await idb.del("fotos-" + v.id);
+          recusadas.push(v); mostrarRecusadas(); continue;
+        }
+        if (e.code === "codigo") pedirCodigo("O código da equipe mudou. Digite o novo código.");
+        break;
+      }
       fila.shift(); store.set("vq-fila", fila);
       await idb.del("fotos-" + v.id);
       const salvo = { ...v, fotos: (j && j.fotos) || [] };
@@ -513,6 +552,11 @@ function resumoMes(arr){
   for (const e of arr || []) { quartos.add(e.room); (porDia[e.date] = porDia[e.date] || new Set()).add(e.room); }
   return { quartos: quartos.size, vistorias: (arr||[]).length, porDia };
 }
+function mostrarRecusadas(){
+  if (!recusadas.length) return;
+  $("#savedMsg").innerHTML = '<div class="notice" style="background:var(--nok-soft)"><p>'+recusadas.map(v => 'A vistoria do quarto <b>'+esc(v.room)+'</b> não foi registrada porque esse quarto já tinha sido vistoriado neste mês por outra pessoa.').join("<br>")+'</p></div>';
+  recusadas = [];
+}
 function toDays(arr){
   const m = {};
   for (const e of arr) { if (!e || !e.date) continue; (m[e.date] = m[e.date] || { date:e.date, entries:{} }).entries[e.id] = e; }
@@ -525,6 +569,7 @@ function recompute(){
   todayData = curDocs[todayKey] || null;
   monthDocs = monthKey === curMonth ? curDocs : toDays(selRemote);
   renderPicker();
+  if (!$("#visao").hidden) renderView();
   if (!$("#p-controle").hidden) renderControl();
 }
 function updateStatus(){
@@ -550,7 +595,7 @@ function roomStatusMonth(){
   const m = {};
   for (const d of Object.values(curDocs)) for (const e of entriesOf(d)) {
     const c = m[e.room];
-    if (!c || (e.finishedAt||"") > c.at) m[e.room] = { s: e.nok > 0 ? "warn" : "done", at: e.finishedAt||"", date: e.date };
+    if (!c || (e.finishedAt||"") > c.at) m[e.room] = { s: e.nok > 0 ? (e.corrigido ? "fixed" : "warn") : "done", at: e.finishedAt||"", date: e.date, id: e.id };
   }
   return m;
 }
@@ -576,7 +621,7 @@ $("#loginForm").addEventListener("submit", async e => {
   }
   store.set("vq-codigo", code); online = true;
   $("#p-login").hidden = true; $("#app").hidden = false; document.querySelector(".tabs").hidden = false;
-  recompute(); enviarFila();
+  recompute(); enviarFila().then(() => carregar());
 });
 
 /* ---------- abas ---------- */
@@ -614,7 +659,7 @@ function renderPicker(){
       const s = st[r]?.s;
       const isDraft = draft && draft.room === r;
       const dd = st[r] ? st[r].date.slice(8,10)+"/"+st[r].date.slice(5,7) : "";
-      const sub = isDraft ? "em andamento" : s === "warn" ? "problema "+dd : s === "done" ? "feito "+dd : "&nbsp;";
+      const sub = s === "warn" ? "problema "+dd : s === "fixed" ? "corrigido "+dd : s === "done" ? "feito "+dd : isDraft ? "em andamento" : "&nbsp;";
       html += '<button class="tag '+(s||"")+(isDraft?" draft":"")+'" data-room="'+esc(r)+'">'+esc(r)+'<small>'+sub+'</small></button>';
     }
     html += '</div></details>';
@@ -629,6 +674,7 @@ function renderPicker(){
 $("#floors").addEventListener("click", e => {
   const b = e.target.closest("[data-room]"); if (!b) return;
   const room = b.dataset.room;
+  if (roomStatusMonth()[room]) { openView(room); return; }   // já vistoriado no mês: só consulta
   if (draft && draft.room && draft.room !== room && (Object.values(draft.answers||{}).some(v => v !== "ok") || draft.general)) {
     $("#draftMsg").innerHTML = '<div class="notice"><p>Você tem uma vistoria do quarto <b>'+esc(draft.room)+'</b> sem finalizar. Abrir o quarto <b>'+esc(room)+'</b> descarta essa vistoria.</p><button class="btn small" data-resume>Continuar a do '+esc(draft.room)+'</button><button class="btn small danger" data-switch="'+esc(room)+'">Descartar e abrir '+esc(room)+'</button></div>';
     return;
@@ -649,6 +695,81 @@ function openRoom(room){
   $("#savedMsg").innerHTML = "";
   openChecklist();
 }
+
+/* ---------- consulta de vistoria (travada) ---------- */
+function acharVistoria(room){
+  let best = null;
+  for (const d of Object.values(curDocs)) for (const e of entriesOf(d)) if (e.room === room && (!best || (e.finishedAt||"") > (best.finishedAt||""))) best = e;
+  return best;
+}
+let visaoRoom = null;
+function openView(room){
+  visaoRoom = room;
+  $("#hero").hidden = true; $("#picker").hidden = true; $("#visao").hidden = false;
+  renderView(); window.scrollTo({top:0});
+}
+function closeView(){ visaoRoom = null; $("#visao").hidden = true; $("#hero").hidden = false; $("#picker").hidden = false; renderPicker(); window.scrollTo({top:0}); }
+// não redesenha um painel enquanto alguém digita nele (a página atualiza sozinha a cada minuto)
+function editando(box){ const a = document.activeElement; return !!(a && box.contains(a) && /INPUT|TEXTAREA/.test(a.tagName) && a.value); }
+function renderView(){
+  if (!visaoRoom || editando($("#visao"))) return;
+  const e = acharVistoria(visaoRoom);
+  if (!e) { closeView(); return; }
+  $("#visao").innerHTML = '<div class="panel stack"><div class="ck-head"><div class="ck-room">'+esc(e.room)+'</div><div style="flex:1 1 200px"><div class="label">Vistoria de '+esc(nomeMes(e.date.slice(0,7)))+'</div><div style="font-weight:600">'+brDate(e.date)+' às '+hhmm(e.finishedAt, e)+'</div></div><button class="btn small" data-voltar>Voltar aos quartos</button></div>'+
+    '<span class="lock">Vistoria travada: este quarto só pode ser vistoriado de novo no próximo mês.</span></div>'+
+    '<div class="panel stack">'+entradaHTML(e)+'</div>';
+}
+$("#visao").addEventListener("click", e => { if (e.target.closest("[data-voltar]")) closeView(); });
+
+// Mostra uma vistoria completa (usado na consulta e no Controle)
+function entradaHTML(e){
+  const pend = e.nok > 0 && !e.corrigido;
+  let h = '<div class="entry"><div class="row"><b>'+hhmm(e.finishedAt, e)+'</b><span class="meta">por '+esc(e.inspector)+' · '+e.ok+' OK, '+e.nok+' com problema, '+e.na+' N/A</span>'+
+    (e.nok ? (e.corrigido ? '<span class="pill ok">Problemas corrigidos</span>' : '<span class="pill warn">Com problema</span>') : '<span class="pill ok">Sem problema</span>')+'</div>';
+  if (e.issues && e.issues.length) h += '<div class="label">Problemas encontrados</div><ul>'+e.issues.map(i => '<li><b>'+esc(i.item)+'</b> <span class="meta">('+esc(i.section)+')</span>'+(i.note?': '+esc(i.note):'')+'</li>').join("")+'</ul>';
+  if (e.naItems && e.naItems.length) h += '<div class="meta">Não se aplica: '+e.naItems.map(esc).join(", ")+'</div>';
+  if (e.general) h += '<div><span class="label">Observações</span><br>'+esc(e.general)+'</div>';
+  if (e.fotos && e.fotos.length) h += '<div class="label">Fotos</div><div class="thumbs">'+e.fotos.map((f,i) => '<a href="'+driveView(f.id)+'" data-foto="'+esc(f.id)+'" data-cap="Quarto '+esc(e.room)+' · '+(f.tipo==="porta"?"Porta":"Foto "+i)+'"><img src="'+driveThumb(f.id)+'" alt="Foto '+(i+1)+'" loading="lazy"><span>'+(f.tipo==="porta"?"Porta":"Foto "+i)+'</span></a>').join("")+'</div>';
+  else if (e._pend && e.nFotos) h += '<div class="meta">'+e.nFotos+' foto(s) aguardando envio</div>';
+  if (e.corrigido) {
+    const c = e.corrigido;
+    h += '<div class="corr feito"><b>Problemas corrigidos</b><span class="meta">'+(c.em ? brDate(c.em.slice(0,10))+' às '+esc(c.hora||"") : '')+(c.por ? ' por '+esc(c.por) : '')+'</span>'+(c.nota ? '<span>'+esc(c.nota)+'</span>' : '')+'</div>';
+  } else if (pend) {
+    if (e._pend) h += '<div class="meta">Assim que esta vistoria for enviada para a planilha, será possível marcar os problemas como corrigidos.</div>';
+    else h += '<div class="corr"><b>Depois de corrigir, registre aqui</b>'+
+      '<input id="corrPor-'+esc(e.id)+'" placeholder="Quem corrigiu" value="'+esc(store.get("vq-inspector")||"")+'">'+
+      '<textarea id="corrNota-'+esc(e.id)+'" rows="2" placeholder="O que foi feito (opcional)"></textarea>'+
+      '<div class="row"><button class="btn ok" data-corrigir="'+esc(e.id)+'">Problemas corrigidos</button><span class="hint" id="corrMsg-'+esc(e.id)+'"></span></div></div>';
+  }
+  return h + '</div>';
+}
+// Botão "Problemas corrigidos" e fotos ampliadas (vale na consulta e no Controle)
+document.addEventListener("click", async ev => {
+  const f = ev.target.closest("[data-foto]");
+  if (f) {
+    ev.preventDefault();
+    $("#lbImg").src = "https://drive.google.com/thumbnail?id=" + encodeURIComponent(f.dataset.foto) + "&sz=w1600";
+    $("#lbTxt").textContent = f.dataset.cap || ""; $("#lbOpen").href = driveView(f.dataset.foto);
+    $("#lb").hidden = false; return;
+  }
+  if (ev.target.closest("#lbClose") || ev.target.id === "lb") { $("#lb").hidden = true; $("#lbImg").src = ""; return; }
+  const b = ev.target.closest("[data-corrigir]"); if (!b) return;
+  const id = b.dataset.corrigir;
+  const por = (document.getElementById("corrPor-"+id)?.value || "").trim();
+  const nota = (document.getElementById("corrNota-"+id)?.value || "").trim();
+  const msg = document.getElementById("corrMsg-"+id);
+  if (!por) { msg.textContent = "Informe quem corrigiu."; return; }
+  b.disabled = true; msg.textContent = "Salvando…";
+  try {
+    const j = await apiCorrigir(id, por, nota);
+    for (const lista of [curRemote, selRemote].concat(Object.values(cache))) for (const x of lista || []) if (x.id === id) x.corrigido = j.corrigido;
+    recompute(); renderView();
+  } catch (err) {
+    b.disabled = false;
+    msg.textContent = err.code === "nao_encontrada" ? "Vistoria não encontrada na planilha." : "Sem conexão com a planilha. Tente de novo.";
+  }
+});
+document.addEventListener("keydown", ev => { if (ev.key === "Escape" && !$("#lb").hidden) { $("#lb").hidden = true; $("#lbImg").src = ""; } });
 
 /* ---------- check list ---------- */
 function openChecklist(){
@@ -746,6 +867,7 @@ $("#finishBtn").addEventListener("click", async () => {
   const msg = $("#finishMsg");
   const inspector = $("#inspector").value.trim();
   if (!inspector) { msg.classList.add("err"); msg.textContent = "Informe o nome do responsável pela vistoria."; $("#inspector").focus(); return; }
+  if (roomStatusMonth()[draft.room]) { msg.classList.add("err"); msg.textContent = "O quarto "+draft.room+" já foi vistoriado neste mês. Descarte esta vistoria."; return; }
   if (!draftFotos.porta) { msg.classList.add("err"); msg.textContent = "Tire a foto da porta do quarto com o número antes de finalizar."; $("#fotos").scrollIntoView({block:"center",behavior:"smooth"}); return; }
   const items = allItems();
   const now = new Date();
@@ -798,6 +920,7 @@ function renderControl(){
   const res = resumoMes(monthEntries);
   const diasPassados = isFuture ? 0 : isCur ? +todayKey.slice(8,10) : b.days;
   const diasBatidos = Object.values(res.porDia).filter(s => s.size >= META_DIARIA).length;
+  const abertos = monthEntries.filter(e => e.nok > 0 && !e.corrigido).sort((a,c) => a.room.localeCompare(c.room));
   const prevKey = prevMonthOf(monthKey);
   const prevArr = cache[prevKey];
   const prevR = prevArr ? resumoMes(prevArr) : null;
@@ -809,7 +932,10 @@ function renderControl(){
     '<div class="stat"><b>'+doneMonth+'</b><span>quartos vistoriados em '+esc(mesNome)+'</span></div>'+
     '<div class="stat"><b>'+(prevR ? prevR.quartos : "–")+'</b><span>quartos vistoriados em '+esc(nomeMes(prevKey))+' (mês anterior)</span></div>'+
     '<div class="stat"><b>'+diasBatidos+'<span style="font-size:18px"> de '+diasPassados+'</span></b><span>dias com a meta de '+META_DIARIA+' batida</span></div>'+
-    '<div class="stat"><b>'+nokMonth+'</b><span>problemas encontrados no mês</span></div>';
+    '<div class="stat"><b>'+nokMonth+'</b><span>problemas encontrados no mês</span></div>'+
+    '<div class="stat"><b>'+abertos.length+'</b><span>quartos com problema ainda não corrigido</span></div>';
+  $("#abertosBox").hidden = !abertos.length;
+  $("#abertos").innerHTML = abertos.map(e => '<button class="chip chipbtn" data-r="'+esc(e.room)+'" data-d="'+e.date+'">'+esc(e.room)+'</button>').join("");
   const groups = new Map();
   for (const r of rooms) { const k = floorName(r); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(r); }
   $("#floorProg").innerHTML = [...groups].map(([g, list]) => { const d = list.filter(r => roomsMonth.has(r)).length; return '<div class="fl"><span>'+esc(g)+'</span><div class="progress"><i style="width:'+(100*d/list.length)+'%"></i></div><b>'+d+'/'+list.length+'</b></div>'; }).join("");
@@ -827,9 +953,9 @@ function renderControl(){
       const es = entriesOf(monthDocs[key]).filter(e => e.room === r);
       let inner = "";
       if (es.length) {
-        const warn = es.some(e => e.nok > 0);
+        const warn = es.some(e => e.nok > 0 && !e.corrigido);
         const sel = selCell && selCell.room === r && selCell.day === key;
-        inner = '<button class="cell '+(warn?"warn":"ok")+(sel?" sel":"")+'" data-r="'+esc(r)+'" data-d="'+key+'" aria-label="Quarto '+esc(r)+', dia '+d+'">'+(es.length>1?es.length:"")+'</button>';
+        inner = '<button class="cell '+(warn?"warn":"ok")+(sel?" sel":"")+'" data-r="'+esc(r)+'" data-d="'+key+'" aria-label="Quarto '+esc(r)+', dia '+d+'">'+(es.length>1 ? es.length : (es.some(e => e.corrigido) ? "✓" : ""))+'</button>';
       }
       body += '<td class="'+(key===todayKey?"tcol":"")+'">'+inner+'</td>';
     }
@@ -849,16 +975,13 @@ function renderControl(){
 }
 function renderDetail(){
   const box = $("#detail");
+  if (selCell && !box.hidden && editando(box)) return;
   if (!selCell) { box.hidden = true; return; }
   const es = entriesOf(monthDocs[selCell.day]).filter(e => e.room === selCell.room).sort((a,c) => (a.finishedAt||"").localeCompare(c.finishedAt||""));
   if (!es.length) { box.hidden = true; return; }
   box.hidden = false;
   box.innerHTML = '<div class="row" style="justify-content:space-between"><h3>Quarto '+esc(selCell.room)+' · '+brDate(selCell.day)+'</h3><button class="btn small" data-close>Fechar</button></div>' +
-    es.map(e => '<div class="entry"><div class="row"><b>'+hhmm(e.finishedAt, e)+'</b><span class="meta">por '+esc(e.inspector)+' · '+e.ok+' OK, '+e.nok+' com problema, '+e.na+' N/A</span>'+(e.nok?'<span class="pill warn">Com problema</span>':'<span class="pill ok">Sem problema</span>')+'</div>'+
-      (e.issues && e.issues.length ? '<div class="label">Problemas encontrados</div><ul>'+e.issues.map(i => '<li><b>'+esc(i.item)+'</b> <span class="meta">('+esc(i.section)+')</span>'+(i.note?': '+esc(i.note):'')+'</li>').join("")+'</ul>' : '')+
-      (e.naItems && e.naItems.length ? '<div class="meta">Não se aplica: '+e.naItems.map(esc).join(", ")+'</div>' : '')+
-      (e.general ? '<div><span class="label">Observações</span><br>'+esc(e.general)+'</div>' : '')+
-      (e.fotos && e.fotos.length ? '<div class="label">Fotos</div><div class="thumbs">'+e.fotos.map((f,i) => '<a href="'+driveView(f.id)+'" target="_blank" rel="noopener"><img src="'+driveThumb(f.id)+'" alt="Foto '+(i+1)+'" loading="lazy"><span>'+(f.tipo==="porta"?"Porta":"Foto "+i)+'</span></a>').join("")+'</div>' : (e._pend && e.nFotos ? '<div class="meta">'+e.nFotos+' foto(s) aguardando envio</div>' : ''))+'</div>').join("");
+    es.map(entradaHTML).join("");
 }
 function pick(e){
   const b = e.target.closest("[data-r][data-d]"); if (!b) return;
@@ -867,6 +990,7 @@ function pick(e){
 }
 $("#grid").addEventListener("click", pick);
 $("#recent").addEventListener("click", pick);
+$("#abertos").addEventListener("click", pick);
 $("#detail").addEventListener("click", e => { if (e.target.closest("[data-close]")) { selCell = null; renderControl(); } });
 function shiftMonth(n){ const b = monthBounds(monthKey); const d = new Date(b.y, b.m-1+n, 1); monthKey = d.getFullYear()+"-"+pad(d.getMonth()+1); selCell = null; selRemote = []; recompute(); carregarMes(); }
 $("#prevM").addEventListener("click", () => shiftMonth(-1));
