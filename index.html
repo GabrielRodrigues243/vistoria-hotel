@@ -1,0 +1,739 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#1D5C57">
+<title>Vistoria de Quartos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=Source+Sans+3:wght@400;600;700&display=swap">
+<style>
+:root{
+  --bg:#EEF2F1; --surface:#FFFFFF; --surface-2:#F5F8F7; --ink:#16211F; --muted:#5A6866; --line:#D3DDDA;
+  --accent:#1D5C57; --accent-ink:#FFFFFF; --accent-soft:#DCEBE8;
+  --ok:#2F7D4E; --ok-soft:#DDF0E3; --nok:#B8470F; --nok-soft:#FBE6D8; --na:#7C8886; --na-soft:#E6EBEA;
+  --brass:#A8782E; --today:#FFF4DC;
+  --display:"Barlow Semi Condensed","Arial Narrow",Arial,sans-serif;
+  --body:"Source Sans 3","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#0F1716; --surface:#172220; --surface-2:#1C2927; --ink:#E4ECEA; --muted:#97A6A3; --line:#2B3B38;
+    --accent:#5FB3AA; --accent-ink:#0C1413; --accent-soft:#1F3634;
+    --ok:#5CC08A; --ok-soft:#183124; --nok:#F08A4B; --nok-soft:#3A2418; --na:#8C9896; --na-soft:#24302E;
+    --brass:#C99A4E; --today:#2E2A1C;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#0F1716; --surface:#172220; --surface-2:#1C2927; --ink:#E4ECEA; --muted:#97A6A3; --line:#2B3B38;
+  --accent:#5FB3AA; --accent-ink:#0C1413; --accent-soft:#1F3634;
+  --ok:#5CC08A; --ok-soft:#183124; --nok:#F08A4B; --nok-soft:#3A2418; --na:#8C9896; --na-soft:#24302E;
+  --brass:#C99A4E; --today:#2E2A1C;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html{color-scheme:light}
+img{max-width:100%}
+:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.45;margin:0}
+button,input,textarea,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:10;background:var(--surface);border-bottom:1px solid var(--line)}
+.top-in{max-width:980px;margin:0 auto;padding-inline:16px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding-block:10px}
+.brand{display:flex;align-items:center;gap:10px;margin-right:auto}
+.brand-mark{width:30px;height:30px;border-radius:7px;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;font-family:var(--display);font-weight:700;font-size:15px}
+.brand h1{font-family:var(--display);font-weight:700;font-size:21px;margin:0;letter-spacing:.01em}
+.tabs{display:flex;gap:4px;background:var(--surface-2);padding:4px;border-radius:10px;border:1px solid var(--line)}
+.tab{border:0;background:transparent;padding:7px 14px;border-radius:7px;font-weight:600;color:var(--muted);font-size:15px}
+.tab[aria-selected="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+
+main{max-width:980px;margin:0 auto;padding-inline:16px;padding-block:20px 60px}
+.status{margin-bottom:16px;padding:10px 14px;border-radius:10px;background:var(--na-soft);color:var(--muted);font-size:14px}
+.status.err{background:var(--nok-soft);color:var(--nok)}
+h2{font-family:var(--display);font-weight:700;font-size:26px;margin:0 0 4px;text-wrap:balance}
+h3{font-family:var(--display);font-weight:600;font-size:19px;margin:0}
+.lead{color:var(--muted);margin:0 0 18px}
+.label{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:700}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px}
+.stack{display:flex;flex-direction:column;gap:16px}
+.row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+
+.btn{text-decoration:none;display:inline-block;border:1px solid var(--line);background:var(--surface);padding:9px 16px;border-radius:9px;font-weight:600}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.primary:disabled{opacity:.45;cursor:not-allowed}
+.btn.danger{color:var(--nok)}
+.btn.small{padding:5px 10px;font-size:14px}
+.field{display:flex;flex-direction:column;gap:6px}
+.field input,.field textarea,textarea.note{border:1px solid var(--line);background:var(--surface-2);border-radius:9px;padding:9px 12px;width:100%}
+textarea{resize:vertical}
+
+/* Room key tags */
+.floor{display:flex;flex-direction:column;gap:8px}
+details.floor>summary{list-style:none;cursor:pointer;padding-block:4px}
+details.floor>summary::-webkit-details-marker{display:none}
+details.floor>summary h3::before{content:"▸";display:inline-block;width:18px;color:var(--muted);transition:transform .15s}
+details.floor[open]>summary h3::before{transform:rotate(90deg)}
+details.floor[open]>summary{margin-bottom:8px}
+.fl{display:grid;grid-template-columns:80px 1fr 64px;gap:10px;align-items:center;font-size:14px}
+.fl b{font-variant-numeric:tabular-nums;text-align:right}
+.tags{display:grid;grid-template-columns:repeat(auto-fill,minmax(78px,1fr));gap:8px}
+.tag{position:relative;border:1px solid var(--line);background:var(--surface);border-radius:10px 10px 18px 18px;padding:16px 6px 10px;font-family:var(--display);font-weight:700;font-size:24px;font-variant-numeric:tabular-nums;text-align:center}
+.tag::before{content:"";position:absolute;top:6px;left:50%;width:9px;height:9px;margin-left:-4.5px;border-radius:50%;border:2px solid var(--brass)}
+.tag:hover{border-color:var(--accent)}
+.tag small{display:block;font-family:var(--body);font-size:11px;font-weight:600;color:var(--muted);letter-spacing:.02em}
+.tag.done{background:var(--ok-soft);border-color:transparent}
+.tag.done small{color:var(--ok)}
+.tag.warn{background:var(--nok-soft);border-color:transparent}
+.tag.warn small{color:var(--nok)}
+.tag.draft{outline:2px dashed var(--accent);outline-offset:1px}
+
+.notice{display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:12px 14px;border-radius:10px;background:var(--accent-soft)}
+.notice p{margin:0;flex:1 1 220px}
+.saved{background:var(--ok-soft)}
+.saved.has-nok{background:var(--nok-soft)}
+
+/* Checklist */
+.ck-head{display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+.ck-room{font-family:var(--display);font-weight:700;font-size:34px;line-height:1;padding:8px 14px;border-radius:10px;background:var(--accent);color:var(--accent-ink);font-variant-numeric:tabular-nums}
+.progress{height:8px;background:var(--na-soft);border-radius:99px;overflow:hidden}
+.progress i{display:block;height:100%;background:var(--accent);transition:width .2s}
+.sec{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.sec-h{display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--surface-2);border-bottom:1px solid var(--line)}
+.sec-h h3{margin-right:auto}
+.sec-h .cnt{font-size:14px;color:var(--muted);font-variant-numeric:tabular-nums}
+.item{display:grid;grid-template-columns:1fr auto;gap:8px 12px;align-items:center;padding:11px 14px;border-top:1px solid var(--line)}
+.item:first-of-type{border-top:0}
+.item.nok{background:var(--nok-soft)}
+.item .txt{min-width:0}
+.item .note{grid-column:1/-1;min-height:44px}
+.seg{display:flex;border:1px solid var(--line);border-radius:9px;overflow:hidden;background:var(--surface)}
+.seg button{border:0;background:transparent;padding:7px 11px;font-weight:700;font-size:13px;color:var(--muted);min-width:46px}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"][data-v="ok"]{background:var(--ok);color:#fff}
+.seg button[aria-pressed="true"][data-v="nok"]{background:var(--nok);color:#fff}
+.seg button[aria-pressed="true"][data-v="na"]{background:var(--na);color:#fff}
+@media (max-width:520px){.item{grid-template-columns:1fr}.seg{justify-self:start}}
+.finish{position:sticky;bottom:0;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;padding-bottom:calc(12px + env(safe-area-inset-bottom,0px));display:flex;gap:12px;align-items:center;flex-wrap:wrap;box-shadow:0 -6px 18px rgba(0,0,0,.06)}
+.finish .msg{flex:1 1 200px;font-size:14px;color:var(--muted)}
+.finish .msg.err{color:var(--nok);font-weight:600}
+
+/* Control */
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.stat b{display:block;font-family:var(--display);font-size:30px;font-weight:700;line-height:1.1;font-variant-numeric:tabular-nums}
+.stat span{font-size:14px;color:var(--muted)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font-family:var(--display);font-weight:600;font-size:16px;padding:2px 10px;border-radius:99px;background:var(--surface-2);border:1px solid var(--line);font-variant-numeric:tabular-nums}
+.monthnav{display:flex;align-items:center;gap:8px}
+.monthnav strong{font-family:var(--display);font-size:22px;min-width:170px;text-align:center;text-transform:capitalize}
+.gridwrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+table.grid{border-collapse:separate;border-spacing:0;font-variant-numeric:tabular-nums;font-size:13px}
+.grid th,.grid td{padding:0;text-align:center;border-bottom:1px solid var(--line);height:32px;min-width:30px}
+.grid thead th{font-weight:600;color:var(--muted);line-height:1.1;padding-block:6px;background:var(--surface-2)}
+.grid thead th small{display:block;font-size:10px;font-weight:600}
+.grid th.room{position:sticky;left:0;z-index:1;background:var(--surface);font-family:var(--display);font-size:16px;font-weight:700;color:var(--ink);padding-inline:12px;border-right:1px solid var(--line);text-align:left;min-width:64px}
+.grid thead th.room{background:var(--surface-2);font-family:var(--body);font-size:12px;color:var(--muted)}
+.grid .tcol{background:var(--today)}
+.grid .wk{color:var(--brass)}
+.cell{width:22px;height:22px;border-radius:6px;border:0;padding:0;display:inline-grid;place-items:center;font-size:11px;font-weight:700;color:#fff}
+.cell.ok{background:var(--ok)}
+.cell.warn{background:var(--nok)}
+.cell.sel{outline:2px solid var(--ink);outline-offset:1px}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:14px;color:var(--muted);align-items:center}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:4px;vertical-align:-1px;margin-right:6px}
+.entry{border-top:1px solid var(--line);padding-top:12px;display:flex;flex-direction:column;gap:6px}
+.entry:first-child{border-top:0;padding-top:0}
+.entry ul{margin:0;padding-left:18px}
+.entry .meta{color:var(--muted);font-size:14px}
+.pill{display:inline-block;font-size:12px;font-weight:700;padding:2px 8px;border-radius:99px}
+.pill.ok{background:var(--ok-soft);color:var(--ok)}
+.pill.warn{background:var(--nok-soft);color:var(--nok)}
+.recent{display:flex;flex-direction:column}
+.recent button{display:grid;grid-template-columns:70px 1fr auto;gap:10px;align-items:center;text-align:left;border:0;border-top:1px solid var(--line);background:transparent;padding:10px 4px}
+.recent button:first-child{border-top:0}
+.recent button:hover{background:var(--surface-2)}
+.recent .rn{font-family:var(--display);font-weight:700;font-size:20px}
+.recent .sub{color:var(--muted);font-size:14px}
+.empty{color:var(--muted);font-size:15px;margin:0}
+.cfg textarea{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:14px;line-height:1.5}
+.two{display:grid;grid-template-columns:1fr 1.4fr;gap:16px}
+@media (max-width:760px){.two{grid-template-columns:1fr}}
+.hint{font-size:14px;color:var(--muted);margin:0}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="top-in">
+    <div class="brand"><div class="brand-mark">VQ</div><h1>Vistoria de Quartos</h1></div>
+    <nav class="tabs" role="tablist">
+      <button class="tab" role="tab" id="t-vistoria" data-tab="vistoria" aria-selected="true">Vistoria</button>
+      <button class="tab" role="tab" id="t-controle" data-tab="controle" aria-selected="false">Controle</button>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div id="status" class="status" hidden></div>
+
+  <!-- CÓDIGO DA EQUIPE -->
+  <section id="p-login" hidden>
+    <form id="loginForm" class="panel stack" style="max-width:420px;margin:24px auto">
+      <div>
+        <h2>Entrar</h2>
+        <p class="lead" style="margin:0">Digite o código da equipe. Ele fica salvo neste aparelho e só é pedido uma vez.</p>
+      </div>
+      <div class="field">
+        <label class="label" for="codigo">Código da equipe</label>
+        <input id="codigo" autocomplete="off" autocapitalize="off">
+      </div>
+      <button class="btn primary" type="submit">Entrar</button>
+      <p id="loginMsg" class="hint"></p>
+    </form>
+  </section>
+
+  <div id="app" class="stack" hidden>
+
+  <!-- VISTORIA -->
+  <section id="p-vistoria" class="stack">
+    <div id="picker" class="stack">
+      <div>
+        <h2>Escolha o quarto</h2>
+        <p class="lead">1. Toque no quarto. 2. Marque só o que tiver problema. 3. Toque em Finalizar. Quartos vistoriados neste mês ficam verdes (ou laranja, se ficou problema).</p>
+      </div>
+      <div id="savedMsg"></div>
+      <div id="draftMsg"></div>
+      <div id="floors" class="stack"></div>
+    </div>
+
+    <div id="checklist" class="stack" hidden>
+      <div class="panel stack">
+        <div class="ck-head">
+          <div class="ck-room" id="ckRoom">—</div>
+          <div style="flex:1 1 200px">
+            <div class="label">Vistoria em andamento</div>
+            <div id="ckDate" style="font-weight:600"></div>
+          </div>
+          <button class="btn small" id="backBtn">Voltar aos quartos</button>
+        </div>
+        <div class="field">
+          <label class="label" for="inspector">Responsável pela vistoria</label>
+          <input id="inspector" autocomplete="name" placeholder="Nome de quem está vistoriando">
+        </div>
+        <div class="stack" style="gap:6px">
+          <div class="row" style="justify-content:space-between"><span id="progTxt" class="hint"></span><span id="nokTxt" class="hint"></span></div>
+          <div class="progress"><i id="progBar" style="width:0"></i></div>
+        </div>
+      </div>
+      <div id="sections" class="stack"></div>
+      <div class="panel field">
+        <label class="label" for="general">Observações gerais</label>
+        <textarea id="general" rows="3" placeholder="Ex.: hóspede relatou barulho no ar-condicionado; solicitado técnico"></textarea>
+      </div>
+      <div class="finish">
+        <div id="finishMsg" class="msg"></div>
+        <button class="btn danger" id="discardBtn">Descartar</button>
+        <button class="btn primary" id="finishBtn">Finalizar vistoria</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- CONTROLE -->
+  <section id="p-controle" class="stack" hidden>
+    <div class="row" style="justify-content:space-between">
+      <div>
+        <h2>Controle de vistorias</h2>
+        <p class="lead" style="margin:0">Quais quartos foram vistoriados e em quais dias.</p>
+      </div>
+      <div class="row"><a class="btn" id="sheetLink" href="#" target="_blank" rel="noopener" hidden>Abrir planilha</a><button class="btn" id="refreshBtn">Atualizar</button></div>
+    </div>
+    <div class="stats" id="stats"></div>
+    <div class="panel stack" style="gap:10px">
+      <div class="label">Progresso por andar</div>
+      <div class="stack" style="gap:8px" id="floorProg"></div>
+    </div>
+    <div class="panel stack" style="gap:10px">
+      <div class="label" id="pendLabel">Faltam vistoriar</div>
+      <div class="stack" style="gap:12px" id="pending"></div>
+    </div>
+    <div class="row" style="justify-content:space-between">
+      <div class="monthnav">
+        <button class="btn small" id="prevM" aria-label="Mês anterior">‹</button>
+        <strong id="monthLbl"></strong>
+        <button class="btn small" id="nextM" aria-label="Próximo mês">›</button>
+      </div>
+      <div class="legend"><span><i style="background:var(--ok)"></i>Sem pendências</span><span><i style="background:var(--nok)"></i>Com não conformidade</span><span><i style="background:var(--today)"></i>Hoje</span></div>
+    </div>
+    <div class="gridwrap"><table class="grid" id="grid"></table></div>
+    <p class="hint">Toque em um dia marcado para ver o check list. O número dentro do quadrado indica mais de uma vistoria no dia.</p>
+    <div class="panel stack" id="detail" hidden></div>
+    <div class="panel stack" style="gap:8px">
+      <div class="label">Últimas vistorias do mês</div>
+      <div class="recent" id="recent"></div>
+    </div>
+  </section>
+  </div>
+</main>
+
+<script>
+(function(){
+/* =====================================================================
+   CONFIGURAÇÃO — edite só esta parte
+   ===================================================================== */
+
+// 1) Cole aqui o link do Apps Script (termina em /exec)
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzVv09gAs67jQGkEhgKu8z6f-bPY4xSjespZUk9x7MFpOcf2QjLJUgDjYttjAgfOBka/exec";
+
+// 2) Opcional: link da planilha, para o botão "Abrir planilha" no Controle
+const PLANILHA_URL = "https://script.google.com/macros/s/AKfycbzVv09gAs67jQGkEhgKu8z6f-bPY4xSjespZUk9x7MFpOcf2QjLJUgDjYttjAgfOBka/exec";
+
+// 3) Quartos: 6 andares com a mesma numeração final em cada andar
+//    (1º andar: 151, 153 ... 182 · 2º andar: 251, 253 ... 282 · e assim até o 6º)
+const ANDARES = 6;
+const FINAIS = [51,53,54,55,56,57,58,59,60,61,62,63,64,65,66,68,69,70,71,72,73,74,75,76,77,78,79,80,82];
+
+// 4) Itens do check list. Para mudar, edite os textos abaixo.
+const CHECKLIST = [
+  { secao: "Entrada e porta", itens: [
+    "Fechadura e cartão funcionando",
+    "Trava interna e olho mágico",
+    "Placa de número e plano de evacuação" ]},
+  { secao: "Quarto", itens: [
+    "Cama arrumada e enxoval limpo, sem manchas",
+    "Travesseiros e cobertor extra",
+    "Piso ou carpete limpo",
+    "Móveis sem poeira e sem danos",
+    "Cortinas e blackout funcionando",
+    "Paredes e teto sem manchas ou rachaduras",
+    "Frigobar limpo e gelando",
+    "Cofre funcionando",
+    "Armário e cabides" ]},
+  { secao: "Elétrica e climatização", itens: [
+    "Todas as lâmpadas acendendo",
+    "Tomadas e interruptores",
+    "Ar-condicionado e controle remoto",
+    "TV, controle e canais",
+    "Telefone com linha",
+    "Wi-Fi com sinal" ]},
+  { secao: "Banheiro", itens: [
+    "Vaso sanitário limpo e descarga funcionando",
+    "Pia, torneira e ralo",
+    "Chuveiro com água quente e boa pressão",
+    "Box, vidro e rejunte limpos",
+    "Espelho limpo",
+    "Toalhas repostas",
+    "Amenities repostos",
+    "Papel higiênico e lixeira",
+    "Exaustor funcionando" ]},
+  { secao: "Segurança e geral", itens: [
+    "Detector de fumaça",
+    "Sem odores no quarto",
+    "Janela ou varanda trancando" ]}
+];
+/* ===================================================================== */
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const pad = n => String(n).padStart(2,"0");
+const localDate = d => d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());
+const localTime = d => pad(d.getHours())+":"+pad(d.getMinutes());
+const hhmm = (iso, e) => { if (e && e.time) return e.time; try { return new Date(iso).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}); } catch(x){ return ""; } };
+const brDate = key => key.slice(8,10)+"/"+key.slice(5,7)+"/"+key.slice(0,4);
+const store = {
+  get(k){ try { return JSON.parse(localStorage.getItem(k)); } catch(e){ return null; } },
+  set(k,v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch(e){} },
+  del(k){ try { localStorage.removeItem(k); } catch(e){} }
+};
+function slug(s){ return String(s).normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,40); }
+
+const QUARTOS = [];
+for (let a = 1; a <= ANDARES; a++) for (const f of FINAIS) QUARTOS.push(String(a*100+f));
+const cfg = {
+  rooms: QUARTOS,
+  sections: CHECKLIST.map(s => ({ name: s.secao, items: s.itens.map(t => ({ id: slug(s.secao).slice(0,16)+"."+slug(t), text: t })) }))
+};
+
+let code = store.get("vq-codigo") || "";
+let fila = store.get("vq-fila") || [];      // vistorias finalizadas aguardando envio
+let todayKey = localDate(new Date());
+let curMonth = todayKey.slice(0,7);
+let curRemote = [];     // vistorias do mês atual vindas da planilha
+let selRemote = [];     // vistorias do mês exibido no Controle
+let curDocs = {}, monthDocs = {}, todayData = null;
+let monthKey = curMonth;
+let selCell = null;
+let draft = store.get("vq-draft");
+let discardArmed = false;
+let online = false;
+
+/* ---------- planilha (Apps Script) ---------- */
+async function apiListar(mes){
+  const u = SCRIPT_URL + "?acao=listar&mes=" + encodeURIComponent(mes) + "&codigo=" + encodeURIComponent(code) + "&t=" + Date.now();
+  const r = await fetch(u);
+  const j = await r.json();
+  if (!j.ok) { const e = new Error(j.erro || "erro"); e.code = j.erro; throw e; }
+  return j.vistorias || [];
+}
+async function apiSalvar(v){
+  const r = await fetch(SCRIPT_URL, { method:"POST", headers:{ "Content-Type":"text/plain;charset=utf-8" }, body: JSON.stringify({ codigo: code, vistoria: v }) });
+  const j = await r.json();
+  if (!j.ok) { const e = new Error(j.erro || "erro"); e.code = j.erro; throw e; }
+}
+let enviando = false;
+async function enviarFila(){
+  if (enviando || !fila.length) { updateStatus(); return; }
+  enviando = true;
+  try {
+    while (fila.length) {
+      const v = fila[0];
+      try { await apiSalvar(v); }
+      catch (e) { if (e.code === "codigo") pedirCodigo("O código da equipe mudou. Digite o novo código."); break; }
+      fila.shift(); store.set("vq-fila", fila);
+      if (!curRemote.some(x => x.id === v.id) && v.date.slice(0,7) === curMonth) curRemote.push(v);
+    }
+  } finally { enviando = false; recompute(); updateStatus(); }
+}
+async function carregar(){
+  try {
+    curRemote = await apiListar(curMonth);
+    if (monthKey !== curMonth && !$("#p-controle").hidden) selRemote = await apiListar(monthKey);
+    online = true;
+  } catch (e) {
+    if (e.code === "codigo") { pedirCodigo("Código da equipe incorreto."); return; }
+    online = false;
+  }
+  recompute(); updateStatus();
+}
+function toDays(arr){
+  const m = {};
+  for (const e of arr) { if (!e || !e.date) continue; (m[e.date] = m[e.date] || { date:e.date, entries:{} }).entries[e.id] = e; }
+  return m;
+}
+function recompute(){
+  const ids = new Set(curRemote.map(e => e.id));
+  const pend = fila.filter(e => !ids.has(e.id) && e.date.slice(0,7) === curMonth).map(e => ({...e, _pend:true}));
+  curDocs = toDays(curRemote.concat(pend));
+  todayData = curDocs[todayKey] || null;
+  monthDocs = monthKey === curMonth ? curDocs : toDays(selRemote);
+  renderPicker();
+  if (!$("#p-controle").hidden) renderControl();
+}
+function updateStatus(){
+  const el = $("#status");
+  if (fila.length) {
+    el.hidden = false; el.classList.add("err");
+    el.textContent = fila.length + (fila.length > 1 ? " vistorias finalizadas aguardando envio" : " vistoria finalizada aguardando envio") + " para a planilha. Elas ficam guardadas neste aparelho e são enviadas quando a conexão voltar.";
+  } else if (!online) {
+    el.hidden = false; el.classList.add("err");
+    el.textContent = "Sem conexão com a planilha. Você pode fazer vistorias normalmente; elas serão enviadas quando a conexão voltar.";
+  } else el.hidden = true;
+}
+
+/* ---------- helpers ---------- */
+function allItems(){ return cfg.sections.flatMap(s => s.items.map(i => ({...i, section:s.name}))); }
+function entriesOf(dayData){ return Object.values(dayData?.entries || {}); }
+function roomStatusToday(){
+  const m = {};
+  for (const e of entriesOf(todayData)) { const cur = m[e.room]; m[e.room] = (cur === "warn" || e.nok > 0) ? "warn" : "done"; }
+  return m;
+}
+function roomStatusMonth(){
+  const m = {};
+  for (const d of Object.values(curDocs)) for (const e of entriesOf(d)) {
+    const c = m[e.room];
+    if (!c || (e.finishedAt||"") > c.at) m[e.room] = { s: e.nok > 0 ? "warn" : "done", at: e.finishedAt||"", date: e.date };
+  }
+  return m;
+}
+function floorOf(r){ return /^\d{3,}$/.test(r) ? r.slice(0,-2) : null; }
+function floorName(r){ const f = floorOf(r); return f === null ? "Outros" : (f === "0" ? "Térreo" : f+"º andar"); }
+
+/* ---------- código da equipe ---------- */
+function pedirCodigo(msg){
+  code = ""; store.del("vq-codigo");
+  $("#p-login").hidden = false; $("#app").hidden = true;
+  $("#loginMsg").textContent = msg || "";
+  $("#codigo").value = ""; $("#codigo").focus();
+}
+$("#loginForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  const v = $("#codigo").value.trim(); if (!v) return;
+  $("#loginMsg").textContent = "Verificando…";
+  code = v;
+  try { curRemote = await apiListar(curMonth); }
+  catch (err) {
+    if (err.code === "codigo") { $("#loginMsg").textContent = "Código incorreto. Confira com o responsável."; code = ""; return; }
+    $("#loginMsg").textContent = "Não foi possível conectar à planilha. Verifique a internet e tente de novo."; code = ""; return;
+  }
+  store.set("vq-codigo", code); online = true;
+  $("#p-login").hidden = true; $("#app").hidden = false;
+  recompute(); enviarFila();
+});
+
+/* ---------- abas ---------- */
+function showTab(name){
+  for (const t of ["vistoria","controle"]) {
+    $("#p-"+t).hidden = t !== name;
+    $("#t-"+t).setAttribute("aria-selected", t === name ? "true" : "false");
+  }
+  if (name === "controle") { renderControl(); if (monthKey !== curMonth) carregarMes(); }
+}
+document.querySelectorAll(".tab").forEach(b => b.addEventListener("click", () => showTab(b.dataset.tab)));
+
+/* ---------- escolha do quarto ---------- */
+function renderPicker(){
+  const rooms = cfg.rooms;
+  const st = roomStatusMonth();
+  const box = $("#floors");
+  const groups = new Map();
+  for (const r of rooms) { const k = floorName(r); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(r); }
+  const doneAll = rooms.filter(r => st[r]).length;
+  const mes = new Date().toLocaleDateString("pt-BR",{month:"long"});
+  const openState = {};
+  box.querySelectorAll("details[data-g]").forEach(d => openState[d.dataset.g] = d.open);
+  let html = '<div class="panel stack" style="gap:8px"><div class="row" style="justify-content:space-between"><span class="label">Meta de '+esc(mes)+'</span><b style="font-variant-numeric:tabular-nums">'+doneAll+' de '+rooms.length+' quartos</b></div><div class="progress"><i style="width:'+(rooms.length?100*doneAll/rooms.length:0)+'%"></i></div></div>';
+  for (const [g, list] of groups) {
+    const done = list.filter(r => st[r]).length;
+    const open = g in openState ? openState[g] : done < list.length;
+    html += '<details class="floor" data-g="'+esc(g)+'"'+(open ? ' open' : '')+'><summary class="row" style="justify-content:space-between"><h3>'+esc(g)+'</h3><span class="hint">'+done+' de '+list.length+' no mês</span></summary><div class="tags">';
+    for (const r of list) {
+      const s = st[r]?.s;
+      const isDraft = draft && draft.room === r;
+      const dd = st[r] ? st[r].date.slice(8,10)+"/"+st[r].date.slice(5,7) : "";
+      const sub = isDraft ? "em andamento" : s === "warn" ? "problema "+dd : s === "done" ? "feito "+dd : "&nbsp;";
+      html += '<button class="tag '+(s||"")+(isDraft?" draft":"")+'" data-room="'+esc(r)+'">'+esc(r)+'<small>'+sub+'</small></button>';
+    }
+    html += '</div></details>';
+  }
+  box.innerHTML = html;
+  const dm = $("#draftMsg");
+  if (draft && draft.room) {
+    const n = Object.values(draft.answers||{}).filter(v => v === "nok").length;
+    dm.innerHTML = '<div class="notice"><p>Há uma vistoria do quarto <b>'+esc(draft.room)+'</b> sem finalizar'+(n ? ' ('+n+' problema'+(n>1?'s':'')+' marcado'+(n>1?'s':'')+')' : '')+'.</p><button class="btn small primary" data-resume>Continuar</button></div>';
+  } else dm.innerHTML = "";
+}
+$("#floors").addEventListener("click", e => {
+  const b = e.target.closest("[data-room]"); if (!b) return;
+  const room = b.dataset.room;
+  if (draft && draft.room && draft.room !== room && (Object.values(draft.answers||{}).some(v => v !== "ok") || draft.general)) {
+    $("#draftMsg").innerHTML = '<div class="notice"><p>Você tem uma vistoria do quarto <b>'+esc(draft.room)+'</b> sem finalizar. Abrir o quarto <b>'+esc(room)+'</b> descarta essa vistoria.</p><button class="btn small" data-resume>Continuar a do '+esc(draft.room)+'</button><button class="btn small danger" data-switch="'+esc(room)+'">Descartar e abrir '+esc(room)+'</button></div>';
+    return;
+  }
+  openRoom(room);
+});
+$("#draftMsg").addEventListener("click", e => {
+  if (e.target.closest("[data-resume]")) openChecklist();
+  const s = e.target.closest("[data-switch]"); if (s) { draft = null; openRoom(s.dataset.switch); }
+});
+function openRoom(room){
+  if (!draft || draft.room !== room) {
+    draft = { room, answers:{}, notes:{}, general:"", startedAt:new Date().toISOString() };
+    allItems().forEach(i => draft.answers[i.id] = "ok");
+  }
+  store.set("vq-draft", draft);
+  $("#savedMsg").innerHTML = "";
+  openChecklist();
+}
+
+/* ---------- check list ---------- */
+function openChecklist(){
+  $("#picker").hidden = true; $("#checklist").hidden = false;
+  $("#ckRoom").textContent = draft.room;
+  $("#ckDate").textContent = new Date().toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"long"});
+  $("#inspector").value = store.get("vq-inspector") || "";
+  $("#general").value = draft.general || "";
+  discardArmed = false; $("#discardBtn").textContent = "Descartar";
+  renderSections(); updateProgress();
+  window.scrollTo({top:0});
+}
+function closeChecklist(){ $("#checklist").hidden = true; $("#picker").hidden = false; renderPicker(); window.scrollTo({top:0}); }
+function itemHTML(it){
+  const v = draft.answers[it.id];
+  const btn = (val, lbl, title) => '<button type="button" data-item="'+esc(it.id)+'" data-v="'+val+'" aria-pressed="'+(v===val)+'" title="'+title+'">'+lbl+'</button>';
+  return '<div class="item'+(v==="nok"?" nok":"")+'" data-row="'+esc(it.id)+'"><div class="txt">'+esc(it.text)+'</div><div class="seg">'+btn("ok","OK","Está tudo certo")+btn("nok","Problema","Tem problema")+btn("na","N/A","Não se aplica")+'</div>'+
+    (v==="nok" ? '<textarea class="note" id="note-'+esc(it.id)+'" data-note="'+esc(it.id)+'" rows="2" placeholder="Descreva o problema encontrado">'+esc(draft.notes[it.id]||"")+'</textarea>' : '')+'</div>';
+}
+function renderSections(){
+  allItems().forEach(i => { if (!draft.answers[i.id]) draft.answers[i.id] = "ok"; });
+  store.set("vq-draft", draft);
+  $("#sections").innerHTML = cfg.sections.map((s, si) =>
+    '<div class="sec" data-sec="'+si+'"><div class="sec-h"><h3>'+esc(s.name)+'</h3><span class="cnt" data-cnt="'+si+'"></span></div>'+
+    s.items.map(itemHTML).join("")+'</div>').join("");
+}
+function updateProgress(){
+  const nok = allItems().filter(i => draft.answers[i.id] === "nok").length;
+  $("#progTxt").textContent = "Todos os itens começam como OK. Toque em Problema só no que estiver errado.";
+  $("#nokTxt").textContent = nok ? nok+" problema"+(nok>1?"s":"") : "";
+  cfg.sections.forEach((s, si) => { const el = document.querySelector('[data-cnt="'+si+'"]'); if (el) { const n = s.items.filter(i => draft.answers[i.id] === "nok").length; el.textContent = n ? n+" com problema" : ""; } });
+  $("#finishMsg").classList.remove("err");
+  $("#finishMsg").textContent = nok ? nok+" problema"+(nok>1?"s":"")+" marcado"+(nok>1?"s":"")+"." : "Nenhum problema marcado.";
+}
+$("#sections").addEventListener("click", e => {
+  const b = e.target.closest("[data-item]"); if (!b) return;
+  const id = b.dataset.item, v = b.dataset.v;
+  draft.answers[id] = draft.answers[id] === v && v !== "ok" ? "ok" : v;
+  store.set("vq-draft", draft);
+  const it = allItems().find(i => i.id === id);
+  b.closest("[data-row]").outerHTML = itemHTML(it);
+  updateProgress();
+});
+$("#sections").addEventListener("input", e => {
+  const t = e.target.closest("[data-note]"); if (!t) return;
+  draft.notes[t.dataset.note] = t.value; store.set("vq-draft", draft);
+});
+$("#general").addEventListener("input", e => { draft.general = e.target.value; store.set("vq-draft", draft); });
+$("#inspector").addEventListener("input", e => store.set("vq-inspector", e.target.value));
+$("#backBtn").addEventListener("click", closeChecklist);
+$("#discardBtn").addEventListener("click", () => {
+  if (!discardArmed) { discardArmed = true; $("#discardBtn").textContent = "Confirmar descarte"; return; }
+  draft = null; store.del("vq-draft"); closeChecklist();
+});
+
+$("#finishBtn").addEventListener("click", async () => {
+  const msg = $("#finishMsg");
+  const inspector = $("#inspector").value.trim();
+  if (!inspector) { msg.classList.add("err"); msg.textContent = "Informe o nome do responsável pela vistoria."; $("#inspector").focus(); return; }
+  const items = allItems();
+  const now = new Date();
+  const issues = items.filter(i => draft.answers[i.id] === "nok").map(i => ({ section:i.section, item:i.text, note:(draft.notes[i.id]||"").trim() }));
+  const na = items.filter(i => draft.answers[i.id] === "na").map(i => i.text);
+  const entry = {
+    id: "v" + now.getTime().toString(36) + Math.random().toString(36).slice(2,6),
+    room: draft.room, date: localDate(now), time: localTime(now), inspector,
+    startedAt: draft.startedAt, finishedAt: now.toISOString(),
+    total: items.length, ok: items.length - issues.length - na.length, nok: issues.length, na: na.length,
+    issues, naItems: na, general: (draft.general||"").trim()
+  };
+  fila.push(entry); store.set("vq-fila", fila);
+  draft = null; store.del("vq-draft");
+  const resumo = 'Vistoria do quarto <b>'+esc(entry.room)+'</b> finalizada às '+entry.time+'. '+(entry.nok ? entry.nok+" problema"+(entry.nok>1?"s":"")+" registrado"+(entry.nok>1?"s":"")+"." : "Nenhum problema.");
+  $("#savedMsg").innerHTML = '<div class="notice saved'+(entry.nok?" has-nok":"")+'"><p>'+resumo+' <span id="envio">Enviando para a planilha…</span></p></div>';
+  closeChecklist(); recompute();
+  await enviarFila();
+  const el = document.getElementById("envio");
+  if (el) el.textContent = fila.some(v => v.id === entry.id) ? "Sem conexão agora: ficou guardada no aparelho e será enviada automaticamente." : "Salva na planilha.";
+});
+
+/* ---------- controle ---------- */
+function monthBounds(mk){ const [y,m] = mk.split("-").map(Number); const days = new Date(y, m, 0).getDate(); return { y, m, days }; }
+async function carregarMes(){
+  if (monthKey === curMonth) { recompute(); return; }
+  $("#recent").innerHTML = '<p class="empty">Carregando…</p>';
+  try { selRemote = await apiListar(monthKey); online = true; } catch (e) { selRemote = []; online = false; }
+  recompute(); updateStatus();
+}
+function renderControl(){
+  const rooms = cfg.rooms;
+  const b = monthBounds(monthKey);
+  $("#monthLbl").textContent = new Date(b.y, b.m-1, 1).toLocaleDateString("pt-BR",{month:"long",year:"numeric"});
+  const st = roomStatusToday();
+  const doneToday = rooms.filter(r => st[r]).length;
+  const monthEntries = Object.values(monthDocs).flatMap(entriesOf);
+  const roomsMonth = new Set(monthEntries.map(e => e.room));
+  const doneMonth = rooms.filter(r => roomsMonth.has(r)).length;
+  const nokMonth = monthEntries.reduce((a,e) => a + (e.nok||0), 0);
+  const isCur = monthKey === curMonth;
+  const pend = rooms.filter(r => !roomsMonth.has(r));
+  const daysLeft = isCur ? b.days - (+todayKey.slice(8,10)) + 1 : 0;
+  const perDay = daysLeft ? Math.ceil(pend.length / daysLeft) : 0;
+  const pct = rooms.length ? Math.round(100*doneMonth/rooms.length) : 0;
+  const mesNome = new Date(b.y, b.m-1, 1).toLocaleDateString("pt-BR",{month:"long"});
+  $("#stats").innerHTML =
+    '<div class="stat" style="grid-column:1/-1"><div class="row" style="justify-content:space-between"><span class="label">Meta de '+esc(mesNome)+': todos os quartos</span><span class="hint">'+pct+'%</span></div><b>'+doneMonth+'<span style="font-size:18px"> de '+rooms.length+' quartos</span></b>'+
+      '<div class="progress" style="margin-block:8px"><i style="width:'+pct+'%"></i></div>'+
+      '<span>'+(pend.length === 0 ? "Meta do mês cumprida." : isCur ? "Faltam "+pend.length+" quartos em "+daysLeft+" dia"+(daysLeft>1?"s":"")+": cerca de "+perDay+" por dia para fechar a meta." : "Ficaram "+pend.length+" quartos sem vistoria neste mês.")+'</span></div>'+
+    (isCur ? '<div class="stat"><b>'+doneToday+'</b><span>quartos vistoriados hoje</span></div>' : '')+
+    '<div class="stat"><b>'+monthEntries.length+'</b><span>vistorias no mês</span></div>'+
+    '<div class="stat"><b>'+nokMonth+'</b><span>problemas encontrados no mês</span></div>';
+  const groups = new Map();
+  for (const r of rooms) { const k = floorName(r); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(r); }
+  $("#floorProg").innerHTML = [...groups].map(([g, list]) => { const d = list.filter(r => roomsMonth.has(r)).length; return '<div class="fl"><span>'+esc(g)+'</span><div class="progress"><i style="width:'+(100*d/list.length)+'%"></i></div><b>'+d+'/'+list.length+'</b></div>'; }).join("");
+  $("#pendLabel").textContent = "Faltam vistoriar em "+mesNome+" · "+pend.length;
+  $("#pending").innerHTML = pend.length ? [...groups].map(([g, list]) => { const p = list.filter(r => !roomsMonth.has(r)); return p.length ? '<div class="stack" style="gap:6px"><span class="hint">'+esc(g)+'</span><div class="chips">'+p.map(r => '<span class="chip">'+esc(r)+'</span>').join("")+'</div></div>' : ''; }).join("") : '<p class="empty">Todos os quartos foram vistoriados neste mês.</p>';
+  const wd = ["D","S","T","Q","Q","S","S"];
+  let head = '<thead><tr><th class="room">Quarto</th>';
+  for (let d=1; d<=b.days; d++) { const key = monthKey+"-"+pad(d); const w = new Date(b.y,b.m-1,d).getDay(); head += '<th class="'+(key===todayKey?"tcol ":"")+(w===0||w===6?"wk":"")+'">'+d+'<small>'+wd[w]+'</small></th>'; }
+  head += '</tr></thead>';
+  let body = '<tbody>';
+  for (const r of rooms) {
+    body += '<tr><th class="room">'+esc(r)+'</th>';
+    for (let d=1; d<=b.days; d++) {
+      const key = monthKey+"-"+pad(d);
+      const es = entriesOf(monthDocs[key]).filter(e => e.room === r);
+      let inner = "";
+      if (es.length) {
+        const warn = es.some(e => e.nok > 0);
+        const sel = selCell && selCell.room === r && selCell.day === key;
+        inner = '<button class="cell '+(warn?"warn":"ok")+(sel?" sel":"")+'" data-r="'+esc(r)+'" data-d="'+key+'" aria-label="Quarto '+esc(r)+', dia '+d+'">'+(es.length>1?es.length:"")+'</button>';
+      }
+      body += '<td class="'+(key===todayKey?"tcol":"")+'">'+inner+'</td>';
+    }
+    body += '</tr>';
+  }
+  body += '</tbody>';
+  $("#grid").innerHTML = head + body;
+  const rec = monthEntries.slice().sort((a,c) => (c.finishedAt||"").localeCompare(a.finishedAt||"")).slice(0,20);
+  $("#recent").innerHTML = rec.length ? rec.map(e => '<button data-r="'+esc(e.room)+'" data-d="'+e.date+'"><span class="rn">'+esc(e.room)+'</span><span><span>'+brDate(e.date)+' às '+hhmm(e.finishedAt, e)+'</span><br><span class="sub">'+esc(e.inspector)+(e._pend?' · aguardando envio':'')+'</span></span>'+(e.nok?'<span class="pill warn">'+e.nok+' problema'+(e.nok>1?'s':'')+'</span>':'<span class="pill ok">OK</span>')+'</button>').join("") : '<p class="empty">Nenhuma vistoria registrada neste mês.</p>';
+  renderDetail();
+}
+function renderDetail(){
+  const box = $("#detail");
+  if (!selCell) { box.hidden = true; return; }
+  const es = entriesOf(monthDocs[selCell.day]).filter(e => e.room === selCell.room).sort((a,c) => (a.finishedAt||"").localeCompare(c.finishedAt||""));
+  if (!es.length) { box.hidden = true; return; }
+  box.hidden = false;
+  box.innerHTML = '<div class="row" style="justify-content:space-between"><h3>Quarto '+esc(selCell.room)+' · '+brDate(selCell.day)+'</h3><button class="btn small" data-close>Fechar</button></div>' +
+    es.map(e => '<div class="entry"><div class="row"><b>'+hhmm(e.finishedAt, e)+'</b><span class="meta">por '+esc(e.inspector)+' · '+e.ok+' OK, '+e.nok+' com problema, '+e.na+' N/A</span>'+(e.nok?'<span class="pill warn">Com problema</span>':'<span class="pill ok">Sem problema</span>')+'</div>'+
+      (e.issues && e.issues.length ? '<div class="label">Problemas encontrados</div><ul>'+e.issues.map(i => '<li><b>'+esc(i.item)+'</b> <span class="meta">('+esc(i.section)+')</span>'+(i.note?': '+esc(i.note):'')+'</li>').join("")+'</ul>' : '')+
+      (e.naItems && e.naItems.length ? '<div class="meta">Não se aplica: '+e.naItems.map(esc).join(", ")+'</div>' : '')+
+      (e.general ? '<div><span class="label">Observações</span><br>'+esc(e.general)+'</div>' : '')+'</div>').join("");
+}
+function pick(e){
+  const b = e.target.closest("[data-r][data-d]"); if (!b) return;
+  selCell = { room:b.dataset.r, day:b.dataset.d }; renderControl();
+  $("#detail").scrollIntoView({block:"nearest",behavior:"smooth"});
+}
+$("#grid").addEventListener("click", pick);
+$("#recent").addEventListener("click", pick);
+$("#detail").addEventListener("click", e => { if (e.target.closest("[data-close]")) { selCell = null; renderControl(); } });
+function shiftMonth(n){ const b = monthBounds(monthKey); const d = new Date(b.y, b.m-1+n, 1); monthKey = d.getFullYear()+"-"+pad(d.getMonth()+1); selCell = null; selRemote = []; recompute(); carregarMes(); }
+$("#prevM").addEventListener("click", () => shiftMonth(-1));
+$("#nextM").addEventListener("click", () => shiftMonth(1));
+$("#refreshBtn").addEventListener("click", async () => { $("#refreshBtn").textContent = "Atualizando…"; await enviarFila(); await carregar(); $("#refreshBtn").textContent = "Atualizar"; });
+if (PLANILHA_URL) { $("#sheetLink").href = PLANILHA_URL; $("#sheetLink").hidden = false; }
+
+/* ---------- início ---------- */
+function virouDia(){
+  const k = localDate(new Date());
+  if (k === todayKey) return false;
+  todayKey = k;
+  if (k.slice(0,7) !== curMonth) { curMonth = k.slice(0,7); curRemote = []; }
+  return true;
+}
+setInterval(() => {
+  if (document.visibilityState !== "visible" || !code) return;
+  virouDia(); enviarFila().then(carregar);
+}, 60000);
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && code) { virouDia(); enviarFila().then(carregar); } });
+window.addEventListener("online", () => { if (code) enviarFila().then(carregar); });
+
+if (SCRIPT_URL.indexOf("COLE_AQUI") === 0) {
+  $("#status").hidden = false; $("#status").classList.add("err");
+  $("#status").textContent = "Falta configurar: abra o arquivo index.html e cole o link do Apps Script em SCRIPT_URL.";
+  $("#p-login").hidden = true; $("#app").hidden = false; renderPicker();
+} else if (!code) {
+  pedirCodigo("");
+} else {
+  $("#app").hidden = false; renderPicker();
+  enviarFila().then(carregar);
+}
+})();
+</script>
+</body>
+</html>
